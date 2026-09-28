@@ -1,54 +1,46 @@
 pipeline {
     agent any
 
-    options {
-        timestamps()
-        disableConcurrentBuilds()
-    }
-
-    parameters {
-        string(
-            name: 'DEPLOY_DIR',
-            defaultValue: '',
-            description: 'Optional writable Tomcat webapps directory. Leave empty to skip deployment.'
-        )
+    tools {
+        maven 'Maven'
     }
 
     stages {
+
         stage('Checkout') {
             steps {
-                checkout scm
+                git 'https://github.com/SwastikP121/cicd'
+            }
+        }
+
+        stage('Build') {
+            steps {
+                sh 'mvn clean package'
             }
         }
 
         stage('Test') {
             steps {
-                sh 'mvn -B clean test'
+                sh 'mvn test'
             }
         }
 
-        stage('Package') {
+        stage('SonarQube Analysis') {
             steps {
-                sh 'mvn -B package -DskipTests'
+                withSonarQubeEnv('SonarQube') {
+                    sh '''
+                        mvn sonar:sonar \
+                        -Dsonar.projectKey=cicd \
+                        -Dsonar.projectName="CI/CD Demo"
+                    '''
+                }
             }
         }
 
         stage('Deploy') {
-            when {
-                expression {
-                    params.DEPLOY_DIR?.trim()
-                }
-            }
             steps {
-                sh 'cp target/simple-web-app.war "$DEPLOY_DIR/simple-web-app.war"'
+                echo 'Deploying Java Web Application...'
             }
-        }
-    }
-
-    post {
-        always {
-            junit testResults: 'target/surefire-reports/*.xml', allowEmptyResults: true
-            archiveArtifacts artifacts: 'target/simple-web-app.war', fingerprint: true, allowEmptyArchive: true
         }
     }
 }
